@@ -1,13 +1,12 @@
 """
 Sistema de Gestão Financeira para Casal
 =======================================
-Aplicação Streamlit para controle de finanças pessoais
+Aplicação Streamlit com autenticação básica
 
 Funcionalidades:
+- Login com e-mail e senha
 - Dashboard com métricas em tempo real
-- Gestão de entradas (salários e rendas extras)
-- Gestão de saídas (despesas categorizadas)
-- Controle de dívidas (em acordo e negativadas)
+- Gestão de entradas, saídas e dívidas
 - Persistência local em CSV
 
 Como executar:
@@ -35,7 +34,7 @@ st.set_page_config(
     page_title="Gestão Financeira",
     page_icon="💰",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 DATA_DIR = Path("data")
@@ -66,7 +65,6 @@ def load_data(file_path):
     """Carrega dados de um arquivo CSV com conversão segura de datas."""
     if file_path.exists():
         df = pd.read_csv(file_path)
-        # Converter colunas de data
         if 'data' in df.columns:
             df['data'] = pd.to_datetime(df['data'], errors='coerce')
         if 'data_inicio' in df.columns:
@@ -79,7 +77,7 @@ def save_data(df, file_path):
     df.to_csv(file_path, index=False)
 
 # ============================================
-# FUNÇÕES DE ADIÇÃO E EXCLUSÃO (CORRIGIDAS)
+# FUNÇÕES DE ADIÇÃO E EXCLUSÃO
 # ============================================
 
 def add_entrada(data, tipo, parceiro, valor, descricao):
@@ -204,7 +202,7 @@ def calcular_metricas(mes, ano):
     }
 
 # ============================================
-# PÁGINAS
+# RENDERIZAÇÃO DAS PÁGINAS
 # ============================================
 
 def render_dashboard(mes, ano):
@@ -333,7 +331,7 @@ def render_entradas():
             with col1:
                 data = st.date_input("Data", value=date.today())
                 tipo = st.selectbox("Tipo", ["Salário", "Renda Extra"])
-                parceiro = st.selectbox("Parceiro", ["Lorena", "Victor"])
+                parceiro = st.selectbox("Parceiro", ["Parceiro A", "Parceiro B"])
             with col2:
                 valor = st.number_input("Valor (R$)", min_value=0.0, step=0.01, format="%.2f")
                 descricao = st.text_input("Descrição")
@@ -391,8 +389,6 @@ def render_entradas():
     df_display = df_filtered.copy()
     df_display['data_fmt'] = df_display['data'].dt.strftime('%d/%m/%Y')
     df_display['valor_fmt'] = df_display['valor'].apply(format_currency)
-
-    # Reset index to access original index
     df_display = df_display.reset_index()
 
     for _, row in df_display.iterrows():
@@ -429,7 +425,7 @@ def render_saidas():
                 data = st.date_input("Data", value=date.today())
                 categoria = st.selectbox("Categoria", [
                     "Alimentação", "Moradia", "Transporte", "Saúde", "Lazer",
-                    "Educação", "Vestuário", "Serviços", "Dívida", "Outros"
+                    "Educação", "Vestuário", "Serviços", "Outros"
                 ])
             with col2:
                 valor = st.number_input("Valor (R$)", min_value=0.0, step=0.01, format="%.2f")
@@ -488,7 +484,6 @@ def render_saidas():
     df_display = df_filtered.copy()
     df_display['data_fmt'] = df_display['data'].dt.strftime('%d/%m/%Y')
     df_display['valor_fmt'] = df_display['valor'].apply(format_currency)
-
     df_display = df_display.reset_index()
 
     for _, row in df_display.iterrows():
@@ -681,69 +676,104 @@ def render_dividas():
                 st.divider()
 
 # ============================================
-# MENU LATERAL COM BOTÕES
+# AUTENTICAÇÃO
 # ============================================
 
-def main():
-    init_csv_files()
+def check_password():
+    """Retorna True se o usuário estiver autenticado."""
+    def login_form():
+        with st.form("login_form"):
+            st.markdown("### 🔒 Acesso Restrito")
+            st.caption("Por favor, faça login para acessar suas finanças.")
+            email = st.text_input("E-mail", placeholder="seu@email.com")
+            password = st.text_input("Senha", type="password")
+            submitted = st.form_submit_button("Entrar", use_container_width=True)
+            if submitted:
+                correct_email = st.secrets.get("auth", {}).get("email", "")
+                correct_password = st.secrets.get("auth", {}).get("password", "")
+                if email == correct_email and password == correct_password:
+                    st.session_state["logged_in"] = True
+                    st.session_state["user_email"] = email
+                    st.rerun()
+                else:
+                    st.error("❌ E-mail ou senha incorretos.")
+    
+    if st.session_state.get("logged_in", False):
+        return True
+    
+    login_form()
+    return False
 
-    if 'mes_selecionado' not in st.session_state:
-        st.session_state.mes_selecionado, st.session_state.ano_selecionado = get_mes_vigente()
-    if 'pagina' not in st.session_state:
-        st.session_state.pagina = "Dashboard"
-
-    with st.sidebar:
-        st.image("https://img.icons8.com/fluency/96/money-bag.png", width=80)
-        st.title("Gestão Financeira")
-        st.markdown("---")
-        
-        # Período
-        st.subheader("📅 Período")
-        col1, col2 = st.columns(2)
-        with col1:
-            mes = st.selectbox("Mês", list(range(1, 13)), index=st.session_state.mes_selecionado - 1)
-        with col2:
-            ano = st.number_input("Ano", min_value=2020, max_value=2030, value=st.session_state.ano_selecionado)
-        st.session_state.mes_selecionado = mes
-        st.session_state.ano_selecionado = ano
-
-        st.markdown("---")
-        st.subheader("📱 Navegação")
-
-        # Botões de navegação
-        if SHADCN_AVAILABLE:
-            if button("🏠 Dashboard", variant="outline", key="btn_dash"):
-                st.session_state.pagina = "Dashboard"
-            if button("📈 Entradas", variant="outline", key="btn_ent"):
-                st.session_state.pagina = "Entradas"
-            if button("📉 Saídas", variant="outline", key="btn_sai"):
-                st.session_state.pagina = "Saídas"
-            if button("💳 Dívidas", variant="outline", key="btn_div"):
-                st.session_state.pagina = "Dívidas"
-        else:
-            if st.button("🏠 Dashboard", use_container_width=True):
-                st.session_state.pagina = "Dashboard"
-            if st.button("📈 Entradas", use_container_width=True):
-                st.session_state.pagina = "Entradas"
-            if st.button("📉 Saídas", use_container_width=True):
-                st.session_state.pagina = "Saídas"
-            if st.button("💳 Dívidas", use_container_width=True):
-                st.session_state.pagina = "Dívidas"
-
-        st.markdown("---")
-        st.caption("💡 Use o Dashboard para visão geral!")
-        st.caption("📊 Sistema v1.0")
-
-    # Renderizar página selecionada
-    pagina = st.session_state.pagina
-    if pagina == "Dashboard":
-        render_dashboard(st.session_state.mes_selecionado, st.session_state.ano_selecionado)
-    elif pagina == "Entradas":
-        render_entradas()
-    elif pagina == "Saídas":
-        render_saidas()
-    elif pagina == "Dívidas":
-        render_dividas()
+# ============================================
+# EXECUÇÃO PRINCIPAL
+# ============================================
 
 if __name__ == "__main__":
-    main()
+    # Verificar autenticação
+    if not st.secrets.get("auth"):
+        st.error("❌ Credenciais não configuradas. Adicione [auth] em .streamlit/secrets.toml ou nas Secrets do Streamlit Cloud.")
+        st.stop()
+    
+    if check_password():
+        # Inicializar dados
+        init_csv_files()
+        
+        if 'mes_selecionado' not in st.session_state:
+            st.session_state.mes_selecionado, st.session_state.ano_selecionado = get_mes_vigente()
+        if 'pagina' not in st.session_state:
+            st.session_state.pagina = "Dashboard"
+
+        # Sidebar
+        with st.sidebar:
+            st.image("https://img.icons8.com/fluency/96/money-bag.png", width=80)
+            st.write(f"👤 **{st.session_state.get('user_email', 'Usuário')}**")
+            if st.button("🚪 Sair", use_container_width=True):
+                st.session_state["logged_in"] = False
+                st.rerun()
+            st.markdown("---")
+            
+            st.subheader("📅 Período")
+            col1, col2 = st.columns(2)
+            with col1:
+                mes = st.selectbox("Mês", list(range(1, 13)), index=st.session_state.mes_selecionado - 1)
+            with col2:
+                ano = st.number_input("Ano", min_value=2020, max_value=2030, value=st.session_state.ano_selecionado)
+            st.session_state.mes_selecionado = mes
+            st.session_state.ano_selecionado = ano
+
+            st.markdown("---")
+            st.subheader("📱 Navegação")
+
+            if SHADCN_AVAILABLE:
+                if button("🏠 Dashboard", variant="outline", key="btn_dash"):
+                    st.session_state.pagina = "Dashboard"
+                if button("📈 Entradas", variant="outline", key="btn_ent"):
+                    st.session_state.pagina = "Entradas"
+                if button("📉 Saídas", variant="outline", key="btn_sai"):
+                    st.session_state.pagina = "Saídas"
+                if button("💳 Dívidas", variant="outline", key="btn_div"):
+                    st.session_state.pagina = "Dívidas"
+            else:
+                if st.button("🏠 Dashboard", use_container_width=True):
+                    st.session_state.pagina = "Dashboard"
+                if st.button("📈 Entradas", use_container_width=True):
+                    st.session_state.pagina = "Entradas"
+                if st.button("📉 Saídas", use_container_width=True):
+                    st.session_state.pagina = "Saídas"
+                if st.button("💳 Dívidas", use_container_width=True):
+                    st.session_state.pagina = "Dívidas"
+
+            st.markdown("---")
+            st.caption("💡 Use o Dashboard para visão geral!")
+            st.caption("📊 Sistema v1.0")
+
+        # Renderizar página
+        pagina = st.session_state.pagina
+        if pagina == "Dashboard":
+            render_dashboard(st.session_state.mes_selecionado, st.session_state.ano_selecionado)
+        elif pagina == "Entradas":
+            render_entradas()
+        elif pagina == "Saídas":
+            render_saidas()
+        elif pagina == "Dívidas":
+            render_dividas()

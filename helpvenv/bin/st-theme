@@ -1,4 +1,4 @@
-#!/workspaces/helpmoney/helpvenv/bin/python
+#!/home/vktnwar/dev/vktnwar/hellp/helpmoney/helpvenv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys
