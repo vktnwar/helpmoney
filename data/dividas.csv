@@ -1,1 +1,2 @@
-credor,valor_total,valor_pago,status,data_inicio,descricao
+credor,parceiro,valor_total,valor_pago,status,data_inicio,descricao
+NUBANK,,130.0,5.0,Em acordo,2025-10-18,ENTRADA ACORDO CARTÃO NUBANK

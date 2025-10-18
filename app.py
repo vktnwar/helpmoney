@@ -57,9 +57,9 @@ def init_csv_files():
     if not ENTRADAS_FILE.exists():
         pd.DataFrame(columns=['data', 'tipo', 'parceiro', 'valor', 'descricao']).to_csv(ENTRADAS_FILE, index=False)
     if not SAIDAS_FILE.exists():
-        pd.DataFrame(columns=['data', 'categoria', 'valor', 'descricao']).to_csv(SAIDAS_FILE, index=False)
+        pd.DataFrame(columns=['data', 'categoria', 'valor', 'descricao', 'parceiro']).to_csv(SAIDAS_FILE, index=False)
     if not DIVIDAS_FILE.exists():
-        pd.DataFrame(columns=['credor', 'valor_total', 'valor_pago', 'status', 'data_inicio', 'descricao']).to_csv(DIVIDAS_FILE, index=False)
+        pd.DataFrame(columns=['credor', 'valor_total', 'parceiro', 'valor_pago', 'status', 'data_inicio', 'descricao']).to_csv(DIVIDAS_FILE, index=False)
 
 def load_data(file_path):
     """Carrega dados de um arquivo CSV com conversão segura de datas."""
@@ -92,18 +92,19 @@ def add_entrada(data, tipo, parceiro, valor, descricao):
     df = pd.concat([df, nova_entrada], ignore_index=True)
     save_data(df, ENTRADAS_FILE)
 
-def add_saida(data, categoria, valor, descricao):
+def add_saida(data, categoria, valor, descricao, parceiro):
     df = load_data(SAIDAS_FILE)
     nova_saida = pd.DataFrame([{
         'data': data.strftime('%Y-%m-%d'),
         'categoria': categoria,
         'valor': valor,
-        'descricao': descricao
+        'descricao': descricao,
+        'parceiro': parceiro
     }])
     df = pd.concat([df, nova_saida], ignore_index=True)
     save_data(df, SAIDAS_FILE)
 
-def add_divida(credor, valor_total, valor_pago, status, data_inicio, descricao):
+def add_divida(credor, parceiro, valor_total, valor_pago, status, data_inicio, descricao):
     df = load_data(DIVIDAS_FILE)
     nova_divida = pd.DataFrame([{
         'credor': credor,
@@ -216,6 +217,25 @@ def render_dashboard(mes, ano):
     cols = st.columns(3)
 
     with cols[0]:
+        if SHADCN_AVAILABLE:
+            with card():
+                st.markdown(f"<h4 style='margin:0;color:#64748b;'>📈 Total de Entradas</h4>", unsafe_allow_html=True)
+                st.markdown(f"<h1 style='margin:10px 0;color:#10b981;'>{format_currency(metricas['total_entradas'])}</h1>", unsafe_allow_html=True)
+                st.caption("Receitas do mês")
+        else:
+            st.metric("📈 Total de Entradas", format_currency(metricas['total_entradas']))
+
+    with cols[1]:
+        if SHADCN_AVAILABLE:
+            with card():
+                st.markdown(f"<h4 style='margin:0;color:#64748b;'>📉 Total de Saídas</h4>", unsafe_allow_html=True)
+                st.markdown(f"<h1 style='margin:10px 0;color:#ef4444;'>{format_currency(metricas['total_saidas'])}</h1>", unsafe_allow_html=True)
+                st.caption("Despesas do mês")
+        else:
+            st.metric("📉 Total de Saídas", format_currency(metricas['total_saidas']))
+
+
+    with cols[2]:
         saldo_emoji = "📈" if metricas['saldo'] >= 0 else "📉"
         if SHADCN_AVAILABLE:
             with card():
@@ -226,23 +246,6 @@ def render_dashboard(mes, ano):
         else:
             st.metric("💵 Saldo em Conta", format_currency(metricas['saldo']))
 
-    with cols[1]:
-        if SHADCN_AVAILABLE:
-            with card():
-                st.markdown(f"<h4 style='margin:0;color:#64748b;'>📈 Total de Entradas</h4>", unsafe_allow_html=True)
-                st.markdown(f"<h1 style='margin:10px 0;color:#10b981;'>{format_currency(metricas['total_entradas'])}</h1>", unsafe_allow_html=True)
-                st.caption("Receitas do mês")
-        else:
-            st.metric("📈 Total de Entradas", format_currency(metricas['total_entradas']))
-
-    with cols[2]:
-        if SHADCN_AVAILABLE:
-            with card():
-                st.markdown(f"<h4 style='margin:0;color:#64748b;'>📉 Total de Saídas</h4>", unsafe_allow_html=True)
-                st.markdown(f"<h1 style='margin:10px 0;color:#ef4444;'>{format_currency(metricas['total_saidas'])}</h1>", unsafe_allow_html=True)
-                st.caption("Despesas do mês")
-        else:
-            st.metric("📉 Total de Saídas", format_currency(metricas['total_saidas']))
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -331,7 +334,7 @@ def render_entradas():
             with col1:
                 data = st.date_input("Data", value=date.today())
                 tipo = st.selectbox("Tipo", ["Salário", "Renda Extra"])
-                parceiro = st.selectbox("Parceiro", ["Parceiro A", "Parceiro B"])
+                parceiro = st.selectbox("Parceiro", ["Lorena", "Victor"])
             with col2:
                 valor = st.number_input("Valor (R$)", min_value=0.0, step=0.01, format="%.2f")
                 descricao = st.text_input("Descrição")
@@ -425,15 +428,16 @@ def render_saidas():
                 data = st.date_input("Data", value=date.today())
                 categoria = st.selectbox("Categoria", [
                     "Alimentação", "Moradia", "Transporte", "Saúde", "Lazer",
-                    "Educação", "Vestuário", "Serviços", "Outros"
+                    "Educação", "Vestuário", "Serviços", "Dívida", "Outros"
                 ])
             with col2:
                 valor = st.number_input("Valor (R$)", min_value=0.0, step=0.01, format="%.2f")
                 descricao = st.text_input("Descrição")
+                parceiro = st.selectbox("Parceiro", ["Lorena", "Victor"])
             submitted = st.form_submit_button("💾 Salvar Saída", use_container_width=True, type="primary")
             if submitted:
                 if valor > 0:
-                    add_saida(data, categoria, valor, descricao)
+                    add_saida(data, categoria, valor, descricao, parceiro)
                     st.success("✅ Saída adicionada com sucesso!")
                     st.rerun()
                 else:
@@ -520,13 +524,14 @@ def render_dividas():
                 valor_pago = st.number_input("Valor Já Pago (R$)", min_value=0.0, step=0.01, format="%.2f")
             with col2:
                 status = st.selectbox("Status", ["Em acordo", "Negativada"])
+                parceiro = st.selectbox("Parceiro", ["Lorena", "Victor"])
                 data_inicio = st.date_input("Data de Início", value=date.today())
                 descricao = st.text_area("Descrição/Observações")
             submitted = st.form_submit_button("💾 Salvar Dívida", use_container_width=True, type="primary")
             if submitted:
                 if valor_total > 0 and credor.strip():
                     if valor_pago <= valor_total:
-                        add_divida(credor, valor_total, valor_pago, status, data_inicio, descricao)
+                        add_divida(credor, parceiro, valor_total, valor_pago, status, data_inicio, descricao)
                         st.success("✅ Dívida adicionada com sucesso!")
                         st.rerun()
                     else:
